@@ -1,7 +1,52 @@
 <resources>
 
-    <string name="app_name">USB/IP Server</string>
+    <string name="app_name">USB/IP Server Kt</string>
     <string name="service_name">USB/IP Server Service</string>
 
-    <string name="ready_text">Claim a USB device from your USB/IP client to get started!</string>
+    <!-- Main UI -->
+    <string name="toolbar_title">USB/IP Server</string>
+    <string name="btn_start_service">Start Service</string>
+    <string name="btn_stop_service">Stop Service</string>
+    <string name="status_running">USB/IP Service Running</string>
+    <string name="status_stopped">USB/IP Service Stopped</string>
+    <string
+        name="ready_text"
+    >Claim a USB device from your USB/IP client to get started!</string>
+    <string name="label_server_address">Server Address</string>
+    <string name="label_port">Port</string>
+    <string name="label_available_devices">Available USB Devices</string>
+    <string name="label_no_devices">No USB devices connected</string>
+
+    <!-- Device list -->
+    <string name="device_unknown">Unknown Device</string>
+    <string name="device_shared">Shared</string>
+    <string name="device_not_shared">Not shared</string>
+    <string name="btn_share">Share</string>
+    <string name="btn_unshare">Unshare</string>
+
+    <!-- Settings drawer -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_battery_title">Battery Optimization</string>
+    <string
+        name="settings_battery_desc"
+    >Prevent Android from killing the USB/IP server when the screen is off.</string>
+    <string name="settings_battery_btn">Open Battery Settings</string>
+    <string name="settings_doze_title">Screen-Off Keep-Alive</string>
+    <string
+        name="settings_doze_desc"
+    >Android\'s Doze mode may suspend connections when the screen is off. Exclude this app from battery optimization to keep USB/IP stable.</string>
+
+    <!-- Notification -->
+    <string name="notification_ticker">USB/IP Server Running</string>
+    <string name="notification_title">USB/IP Server Running</string>
+    <string name="notification_no_devices">No devices currently shared</string>
+    <string name="notification_sharing_devices">Sharing %d device(s)</string>
+
+    <!-- Wi-Fi status -->
+    <string name="wifi_permission_denied">Permission denied</string>
+    <string name="wifi_not_connected">Not connected</string>
+
+    <!-- Menu -->
+    <string name="menu_settings">Settings</string>
+
 </resources>

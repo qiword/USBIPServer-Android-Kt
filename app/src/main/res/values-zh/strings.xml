@@ -1,0 +1,46 @@
+<resources>
+
+    <string name="app_name">USB/IP 服务器</string>
+    <string name="service_name">USB/IP 服务器服务</string>
+
+    <!-- 主界面 -->
+    <string name="toolbar_title">USB/IP 服务器</string>
+    <string name="btn_start_service">启动服务</string>
+    <string name="btn_stop_service">停止服务</string>
+    <string name="status_running">USB/IP 服务运行中</string>
+    <string name="status_stopped">USB/IP 服务已停止</string>
+    <string name="ready_text">从 USB/IP 客户端连接设备即可开始！</string>
+    <string name="label_server_address">服务器地址</string>
+    <string name="label_port">端口</string>
+    <string name="label_available_devices">可用 USB 设备</string>
+    <string name="label_no_devices">未连接 USB 设备</string>
+
+    <!-- 设备列表 -->
+    <string name="device_unknown">未知设备</string>
+    <string name="device_shared">已共享</string>
+    <string name="device_not_shared">未共享</string>
+    <string name="btn_share">共享</string>
+    <string name="btn_unshare">取消共享</string>
+
+    <!-- 设置面板 -->
+    <string name="settings_title">设置</string>
+    <string name="settings_battery_title">电池优化</string>
+    <string name="settings_battery_desc">防止 Android 在息屏时终止 USB/IP 服务。</string>
+    <string name="settings_battery_btn">打开电池设置</string>
+    <string name="settings_doze_title">息屏保活</string>
+    <string name="settings_doze_desc">Android Doze 模式可能会在息屏后断开连接。将此应用从电池优化中排除以保持 USB/IP 稳定。</string>
+
+    <!-- 通知 -->
+    <string name="notification_ticker">USB/IP 服务运行中</string>
+    <string name="notification_title">USB/IP 服务运行中</string>
+    <string name="notification_no_devices">当前无共享设备</string>
+    <string name="notification_sharing_devices">正在共享 %d 个设备</string>
+
+    <!-- Wi-Fi 状态 -->
+    <string name="wifi_permission_denied">权限被拒绝</string>
+    <string name="wifi_not_connected">未连接</string>
+
+    <!-- 菜单 -->
+    <string name="menu_settings">设置</string>
+
+</resources>
