@@ -198,7 +198,7 @@
         </androidx.core.widget.NestedScrollView>
     </LinearLayout>
 
-    <!-- Right drawer — Settings -->
+    <!-- Right drawer: Settings -->
     <LinearLayout
         android:id="@+id/drawerMenu"
         android:layout_width="300dp"

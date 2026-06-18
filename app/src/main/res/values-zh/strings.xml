@@ -25,10 +25,14 @@
     <!-- 设置面板 -->
     <string name="settings_title">设置</string>
     <string name="settings_battery_title">电池优化</string>
-    <string name="settings_battery_desc">防止 Android 在息屏时终止 USB/IP 服务。</string>
+    <string
+        name="settings_battery_desc"
+    >防止 Android 在息屏时终止 USB/IP 服务。</string>
     <string name="settings_battery_btn">打开电池设置</string>
     <string name="settings_doze_title">息屏保活</string>
-    <string name="settings_doze_desc">Android Doze 模式可能会在息屏后断开连接。将此应用从电池优化中排除以保持 USB/IP 稳定。</string>
+    <string
+        name="settings_doze_desc"
+    >Android Doze 模式可能会在息屏后断开连接。将此应用从电池优化中排除以保持 USB/IP 稳定。</string>
 
     <!-- 通知 -->
     <string name="notification_ticker">USB/IP 服务运行中</string>

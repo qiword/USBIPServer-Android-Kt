@@ -61,6 +61,26 @@ class UsbIpService : Service(), UsbRequestHandler {
     // Devices marked as "shared" by the Activity (via Binder)
     private val sharedDevices = ConcurrentHashMap.newKeySet<Int>()
 
+    // Per-socket write queue to avoid synchronized contention
+    private val writeContextMap = ConcurrentHashMap<Socket, WriteContext>()
+
+    private class WriteContext(val sock: Socket) : Thread("usbip-writer") {
+        val queue = java.util.concurrent.LinkedBlockingQueue<ByteArray>()
+
+        override fun run() {
+            try {
+                while (!isInterrupted) {
+                    val data = queue.take()
+                    sock.getOutputStream().write(data)
+                }
+            } catch (e: IOException) {
+                // socket closed
+            } catch (e: InterruptedException) {
+                // shutting down
+            }
+        }
+    }
+
     private lateinit var usbPermissionIntent: PendingIntent
 
     private val usbReceiver = object : BroadcastReceiver() {
@@ -228,6 +248,12 @@ class UsbIpService : Service(), UsbRequestHandler {
         for (i in 0 until connections.size()) {
             cleanupDetachedDevice(connections.keyAt(i))
         }
+
+        // Cleanup remaining write threads
+        for ((_, ctx) in writeContextMap) {
+            ctx.interrupt()
+        }
+        writeContextMap.clear()
 
         lowLatencyWifiLock?.release()
         highPerfWifiLock.release()
@@ -449,12 +475,10 @@ class UsbIpService : Service(), UsbRequestHandler {
                     )
 
                     if (context.requestPool!!.isShutdown) {
-                        // Bail if the queue is being torn down
                         return@submit
                     }
 
                     if (!context.activeMessages!!.contains(msg)) {
-                        // Somebody cancelled the URB, return without responding
                         return@submit
                     }
                 } while (res == -110) // ETIMEDOUT
@@ -510,12 +534,10 @@ class UsbIpService : Service(), UsbRequestHandler {
                     )
 
                     if (context.requestPool!!.isShutdown) {
-                        // Bail if the queue is being torn down
                         return@submit
                     }
 
                     if (!context.activeMessages!!.contains(msg)) {
-                        // Somebody cancelled the URB, return without responding
                         return@submit
                     }
                 } while (res == -110) // ETIMEDOUT
@@ -617,12 +639,10 @@ class UsbIpService : Service(), UsbRequestHandler {
                     )
 
                     if (context.requestPool!!.isShutdown) {
-                        // Bail if the queue is being torn down
                         return
                     }
 
                     if (!context.activeMessages!!.contains(msg)) {
-                        // Somebody cancelled the URB, return without responding
                         return
                     }
                 } while (res == -110) // ETIMEDOUT
@@ -632,7 +652,6 @@ class UsbIpService : Service(), UsbRequestHandler {
             }
 
             if (!context.activeMessages!!.remove(msg)) {
-                // Somebody cancelled the URB, return without responding
                 return
             }
 
@@ -751,12 +770,13 @@ class UsbIpService : Service(), UsbRequestHandler {
             endpointCount += dev.getInterface(i).endpointCount
         }
 
-        // Use a thread pool with a thread per endpoint
+        // Use a thread pool with 2x endpoints for better URB concurrency
+        val poolSize = maxOf(endpointCount * 2, 4)
         context.requestPool = ThreadPoolExecutor(
-            endpointCount,
-            endpointCount,
-            Long.MAX_VALUE,
-            TimeUnit.DAYS,
+            poolSize,
+            poolSize,
+            60L,
+            TimeUnit.SECONDS,
             LinkedBlockingQueue(),
             ThreadPoolExecutor.DiscardPolicy()
         )
@@ -767,12 +787,23 @@ class UsbIpService : Service(), UsbRequestHandler {
         connections.put(dev.deviceId, context)
         socketMap[s] = context
 
+        // Start dedicated write thread for this socket
+        val wc = WriteContext(s)
+        writeContextMap[s] = wc
+        wc.start()
+
         updateNotification()
         return true
     }
 
     private fun cleanupDetachedDevice(deviceId: Int) {
         val context = connections[deviceId] ?: return
+
+        // Stop the write thread for this device's socket
+        val sock = socketMap.entries.firstOrNull { it.value == context }?.key
+        sock?.let {
+            writeContextMap.remove(it)?.interrupt()
+        }
 
         // Clear this attachment's context
         connections.remove(deviceId)
@@ -957,30 +988,36 @@ class UsbIpService : Service(), UsbRequestHandler {
                 }
             }
         }
+    }
 
-        @JvmStatic
-        private fun sendReply(s: Socket, reply: UsbIpSubmitUrbReply, status: Int) {
-            reply.status = status
-            try {
-                // We need to synchronize to avoid writing on top of ourselves
-                synchronized(s) {
+    private fun sendReply(s: Socket, reply: UsbIpSubmitUrbReply, status: Int) {
+        reply.status = status
+        val ctx = writeContextMap[s]
+        if (ctx != null) {
+            ctx.queue.offer(reply.serialize())
+        } else {
+            synchronized(s) {
+                try {
                     s.getOutputStream().write(reply.serialize())
+                } catch (e: IOException) {
+                    e.printStackTrace()
                 }
-            } catch (e: IOException) {
-                e.printStackTrace()
             }
         }
+    }
 
-        @JvmStatic
-        private fun sendReply(s: Socket, reply: UsbIpUnlinkUrbReply, status: Int) {
-            reply.status = status
-            try {
-                // We need to synchronize to avoid writing on top of ourselves
-                synchronized(s) {
+    private fun sendReply(s: Socket, reply: UsbIpUnlinkUrbReply, status: Int) {
+        reply.status = status
+        val ctx = writeContextMap[s]
+        if (ctx != null) {
+            ctx.queue.offer(reply.serialize())
+        } else {
+            synchronized(s) {
+                try {
                     s.getOutputStream().write(reply.serialize())
+                } catch (e: IOException) {
+                    e.printStackTrace()
                 }
-            } catch (e: IOException) {
-                e.printStackTrace()
             }
         }
     }
