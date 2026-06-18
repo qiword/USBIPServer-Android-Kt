@@ -41,6 +41,7 @@ import java.io.IOException
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -58,7 +59,7 @@ class UsbIpService : Service(), UsbRequestHandler {
     private var lowLatencyWifiLock: WifiManager.WifiLock? = null
 
     // Devices marked as "shared" by the Activity (via Binder)
-    private val sharedDevices = HashSet<Int>()
+    private val sharedDevices = ConcurrentHashMap.newKeySet<Int>()
 
     private lateinit var usbPermissionIntent: PendingIntent
 
@@ -83,9 +84,7 @@ class UsbIpService : Service(), UsbRequestHandler {
                         TAG,
                         "usbReceiver: permission granted for device " + dev.deviceId
                     )
-                    synchronized(sharedDevices) {
-                        sharedDevices.add(dev.deviceId)
-                    }
+                    sharedDevices.add(dev.deviceId)
                     updateNotification()
                 } else {
                     Log.i(
@@ -123,14 +122,12 @@ class UsbIpService : Service(), UsbRequestHandler {
             .setContentIntent(pendIntent)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
 
-        synchronized(sharedDevices) {
-            if (sharedDevices.isEmpty()) {
-                builder.setContentText(getString(R.string.notification_no_devices))
-            } else {
-                builder.setContentText(
-                    getString(R.string.notification_sharing_devices, sharedDevices.size)
-                )
-            }
+        if (sharedDevices.isEmpty()) {
+            builder.setContentText(getString(R.string.notification_no_devices))
+        } else {
+            builder.setContentText(
+                getString(R.string.notification_sharing_devices, sharedDevices.size)
+            )
         }
 
         startForeground(NOTIFICATION_ID, builder.build())
@@ -224,7 +221,7 @@ class UsbIpService : Service(), UsbRequestHandler {
         unregisterReceiver(usbReceiver)
 
         // Clear all shared devices
-        synchronized(sharedDevices) { sharedDevices.clear() }
+        sharedDevices.clear()
         updateNotification()
 
         // Detach all active connections
@@ -385,30 +382,28 @@ class UsbIpService : Service(), UsbRequestHandler {
     override fun getDevices(): List<UsbDeviceInfo> {
         val list = ArrayList<UsbDeviceInfo>()
 
-        synchronized(sharedDevices) {
+        Log.i(
+            TAG,
+            "getDevices: sharedDevices=" + sharedDevices +
+                    " totalUSB=" + usbManager.deviceList.size
+        )
+        for (dev in usbManager.deviceList.values) {
+            if (!sharedDevices.contains(dev.deviceId)) {
+                Log.d(
+                    TAG,
+                    "getDevices: skipping device " + dev.deviceName + " (not shared)"
+                )
+                continue
+            }
             Log.i(
                 TAG,
-                "getDevices: sharedDevices=" + sharedDevices +
-                        " totalUSB=" + usbManager.deviceList.size
+                "getDevices: including device " + dev.deviceName +
+                        " VendorId=0x" + Integer.toHexString(dev.vendorId)
             )
-            for (dev in usbManager.deviceList.values) {
-                if (!sharedDevices.contains(dev.deviceId)) {
-                    Log.d(
-                        TAG,
-                        "getDevices: skipping device " + dev.deviceName + " (not shared)"
-                    )
-                    continue
-                }
-                Log.i(
-                    TAG,
-                    "getDevices: including device " + dev.deviceName +
-                            " VendorId=0x" + Integer.toHexString(dev.vendorId)
-                )
-                val context = connections[dev.deviceId]
-                val devConn = context?.devConn
+            val context = connections[dev.deviceId]
+            val devConn = context?.devConn
 
-                list.add(getInfoForDevice(dev, devConn))
-            }
+            list.add(getInfoForDevice(dev, devConn))
         }
 
         Log.i(TAG, "getDevices: returning " + list.size + " devices")
@@ -848,9 +843,7 @@ class UsbIpService : Service(), UsbRequestHandler {
         // If we already have permission, share immediately
         if (usbManager.hasPermission(dev)) {
             Log.i(TAG, "doShareDevice: already have permission for device $deviceId")
-            synchronized(sharedDevices) {
-                sharedDevices.add(deviceId)
-            }
+            sharedDevices.add(deviceId)
             updateNotification()
             return true
         }
@@ -863,9 +856,7 @@ class UsbIpService : Service(), UsbRequestHandler {
     }
 
     internal fun doUnshareDevice(deviceId: Int) {
-        synchronized(sharedDevices) {
-            sharedDevices.remove(deviceId)
-        }
+        sharedDevices.remove(deviceId)
 
         // If this device is currently attached by a remote client, kill its socket
         var clientSocket: Socket? = null
@@ -883,9 +874,7 @@ class UsbIpService : Service(), UsbRequestHandler {
     }
 
     internal fun getSharedDeviceIds(): Set<Int> {
-        synchronized(sharedDevices) {
-            return HashSet(sharedDevices)
-        }
+        return HashSet(sharedDevices)
     }
 
     companion object {

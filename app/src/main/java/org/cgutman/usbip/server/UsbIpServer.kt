@@ -100,6 +100,8 @@ class UsbIpServer {
             try {
                 s.tcpNoDelay = true
                 s.keepAlive = true
+                s.sendBufferSize = 256 * 1024
+                s.receiveBufferSize = 256 * 1024
 
                 while (!Thread.currentThread().isInterrupted) {
                     if (handleRequest(s)) {

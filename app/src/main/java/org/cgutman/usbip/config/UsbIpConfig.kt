@@ -1,10 +1,11 @@
 package org.cgutman.usbip.config
 
 import android.Manifest
-import android.app.ActivityManager
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
@@ -15,10 +16,7 @@ import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
-import android.os.PowerManager
 import android.provider.Settings
 import android.text.format.Formatter
 import android.util.Log
@@ -59,14 +57,18 @@ class UsbIpConfig : ComponentActivity() {
     private lateinit var toolbar: MaterialToolbar
 
     private var running: Boolean = false
-    private val refreshHandler = Handler(Looper.getMainLooper())
-    private var refreshRunnable: Runnable? = null
 
     // Track which devices are currently shared (mirrored from Service)
     private val sharedDevices = HashSet<Int>()
 
     private lateinit var usbManager: UsbManager
     private var serviceBinder: UsbIpServiceBinder? = null
+
+    private val usbReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            refreshDeviceList()
+        }
+    }
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
@@ -160,7 +162,6 @@ class UsbIpConfig : ComponentActivity() {
     }
 
     private fun refreshDeviceList() {
-        // Sync shared state from Service first
         syncSharedDevicesFromService()
 
         val deviceMap = usbManager.deviceList
@@ -180,16 +181,6 @@ class UsbIpConfig : ComponentActivity() {
             Pair(device, sharedDevices.contains(device.deviceId))
         }
         deviceAdapter.submitList(deviceList)
-    }
-
-    private fun isMyServiceRunning(serviceClass: Class<*>): Boolean {
-        val manager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        for (service in manager.getRunningServices(Int.MAX_VALUE)) {
-            if (serviceClass.name == service.service.className) {
-                return true
-            }
-        }
-        return false
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -228,14 +219,7 @@ class UsbIpConfig : ComponentActivity() {
             }
         }
 
-        running = isMyServiceRunning(UsbIpService::class.java)
         updateStatus()
-
-        // If service is already running, bind to it to get shared state
-        if (running) {
-            val intent = Intent(this@UsbIpConfig, UsbIpService::class.java)
-            bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
-        }
 
         serviceButton.setOnClickListener {
             if (running) {
@@ -244,7 +228,6 @@ class UsbIpConfig : ComponentActivity() {
                     unbindService(serviceConnection)
                     serviceBinder = null
                 }
-                // Clear local shared state
                 sharedDevices.clear()
                 refreshDeviceList()
             } else {
@@ -286,34 +269,31 @@ class UsbIpConfig : ComponentActivity() {
             drawerLayout.closeDrawer(GravityCompat.END)
         }
 
-        // Periodic refresh
-        refreshRunnable = object : Runnable {
-            override fun run() {
-                running = isMyServiceRunning(UsbIpService::class.java)
-                updateStatus()
-                if (running) {
-                    ipAddressText.text = getWifiIpAddress()
-                }
-                refreshDeviceList()
-                refreshHandler.postDelayed(this, REFRESH_INTERVAL_MS.toLong())
-            }
+        // Listen for USB device attach/detach instead of polling
+        val filter = IntentFilter().apply {
+            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
         }
+        registerReceiver(usbReceiver, filter)
 
         refreshDeviceList()
     }
 
     override fun onResume() {
         super.onResume()
-        refreshRunnable?.run()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        refreshRunnable?.let { refreshHandler.removeCallbacks(it) }
+        updateStatus()
+        if (running) {
+            ipAddressText.text = getWifiIpAddress()
+        }
+        refreshDeviceList()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            unregisterReceiver(usbReceiver)
+        } catch (_: IllegalArgumentException) {
+        }
         try {
             unbindService(serviceConnection)
         } catch (_: IllegalArgumentException) {
@@ -399,7 +379,6 @@ class UsbIpConfig : ComponentActivity() {
 
     companion object {
         private const val TAG = "UsbIpConfig"
-        private const val REFRESH_INTERVAL_MS = 2000
         private const val USBIP_PORT = 3240
     }
 }
