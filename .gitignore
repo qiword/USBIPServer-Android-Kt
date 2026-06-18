@@ -41,4 +41,4 @@ build/
 app/.externalNativeBuild/
 
 # NDK stuff
-.cxx/
+.cxx/usbip_packets*.log
